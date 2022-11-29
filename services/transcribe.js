@@ -16,7 +16,7 @@ const waitForStreamToStartTranscribe = (stream, ffmpeg, transcribeData) => {
     return func;
 }
 
-eventEmitter.on('transcribe', ({ userId, sessionId, listenFrom }) => {
+const onTranscribe = ({ userId, sessionId, listenFrom }) => {
     const audioPayloadStream = new PassThrough({ highWaterMark: 1024 });
 
     const audioStream = async function* () {
@@ -30,29 +30,14 @@ eventEmitter.on('transcribe', ({ userId, sessionId, listenFrom }) => {
     ffmpeg.stdout.pipe(audioPayloadStream);
 
     audioPayloadStream.on('data', waitForStreamToStartTranscribe(audioPayloadStream, ffmpeg, { userId, sessionId }));
-});
+};
 
-eventEmitter.on('startTranscribe', async ({ stream, ffmpeg, transcribeData: { userId, sessionId } }) => {
+const onStartTranscribe = async ({ stream, ffmpeg, transcribeData: { userId, sessionId } }) => {
     const audioStream = async function* () {
         for await (const chunk of stream) {
             yield {AudioEvent: {AudioChunk: chunk}};
         }
     }
-
-    const command = new StartStreamTranscriptionCommand({
-        // The language code for the input audio. Valid values are en-GB, en-US, es-US, fr-CA, and fr-FR
-        LanguageCode: 'en-US',
-        // The encoding used of the input audio. The only valid value is pcm.
-        MediaEncoding: 'pcm',
-        // Enables speaker partitioning (diarization) in your transcription output. Speaker partitioning labels the speech from individual speakers in your media file.
-        ShowSpeakerLabel: true,
-        // The sample rate of the input audio in Hertz. We suggest that you use 8000 Hz for low-quality audio and 16000 Hz for high-quality audio.
-        // The sample rate must match the sample rate in the audio file.
-        MediaSampleRateHertz: process.env.TRANSCRIBING_SAMPLE_RATE,
-        // Set input read stream
-        AudioStream: audioStream(),
-        SessionId: sessionId,
-    });
 
     const transcribeClient = new TranscribeStreamingClient({
         credentials: {
@@ -62,7 +47,14 @@ eventEmitter.on('startTranscribe', async ({ stream, ffmpeg, transcribeData: { us
         region: process.env.AWS_REGION,
     });
 
-    const result = await transcribeClient.send(command);
+    const result = await transcribeClient.send(new StartStreamTranscriptionCommand({
+        LanguageCode: 'en-US',
+        MediaEncoding: 'pcm',
+        ShowSpeakerLabel: true,
+        MediaSampleRateHertz: process.env.TRANSCRIBING_SAMPLE_RATE,
+        AudioStream: audioStream(),
+        SessionId: sessionId,
+    }));
 
     ffmpeg.on('close', (code) => {
         transcribeClient.destroy();
@@ -78,9 +70,9 @@ eventEmitter.on('startTranscribe', async ({ stream, ffmpeg, transcribeData: { us
         transcripts: result.TranscriptResultStream,
         sessionId,
     });
-});
+}
 
-eventEmitter.on('transcripting', ({ transcripts, sessionId }) => {
+const onTranscripting = ({ transcripts, sessionId }) => {
     console.log('TRANSCRIPTING: ', sessionId);
 
     Readable.from(transcripts).pipe(
@@ -93,13 +85,18 @@ eventEmitter.on('transcripting', ({ transcripts, sessionId }) => {
             }
         })
     )
-});
+}
 
-eventEmitter.on('stopTranscribing', () => {
+const onStopTranscripting = () => {
     console.log('stopped transcribing');
     console.log('uploading recording to s3...');
     console.log('recording uploaded');
-})
+}
+
+eventEmitter.on('transcribe', onTranscribe);
+eventEmitter.on('startTranscribe', onStartTranscribe);
+eventEmitter.on('transcripting', onTranscripting);
+eventEmitter.on('stopTranscribing', onStopTranscripting)
 
 module.exports = {
     eventEmitter,
