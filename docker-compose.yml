@@ -1,0 +1,35 @@
+services:
+  development:
+    build: ./
+    tty: true
+    working_dir: /usr/src/app
+    command: ["npm", "run", "start:dev"]
+    ports:
+      - "80:80"
+      - "1935:1935"
+    env_file:
+      - .env.development
+    environment:
+#      - DEBUG=*
+      - DEBUG=*,-socket.io:socket,-socket.io:client,-socket.io-parser,-socket.io:namespace,-engine:ws,-engine:socket,-engine,engine:polling,-engine:transport,-follow-redirects
+      - NODE_ENV=development
+      - PORT=80
+    volumes:
+      - ./:/usr/src/app
+      - /usr/src/app/node_modules
+  staging:
+    build: ./
+    tty: true
+    working_dir: /usr/src/app
+    command: [ "npm", "run", "start" ]
+    ports:
+      - "80:80"
+      - "1935:1935"
+    env_file:
+      - .env.staging
+    environment:
+      - NODE_ENV=staging
+      - PORT=80
+    volumes:
+      - ./:/usr/src/app
+      - /usr/src/app/node_modules
