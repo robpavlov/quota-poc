@@ -1,11 +1,22 @@
 const { TranscribeStreamingClient, StartStreamTranscriptionCommand } = require('@aws-sdk/client-transcribe-streaming');
 const { randomUUID } = require('node:crypto');
-const { PassThrough, Readable, pipeline, Transform } = require('node:stream');
+const { PassThrough, Readable, pipeline, Transform, EventEmitter } = require('node:stream');
 const { createFfmpeg } = require('./ffmpeg');
-const { Upload } = require('@aws-sdk/lib-storage');
-const { uploadRecording } = require('./s3');
 
-const startTranscribing = async (listenFrom, { userId, sessionId }) => {
+const eventEmitter = new EventEmitter();
+
+const waitForStreamToStartTranscribe = (stream, ffmpeg, transcribeData) => {
+    const func =  function (chunk) {
+        console.log('stream started');
+        stream.removeListener('data', func);
+
+        eventEmitter.emit('startTranscribe', { stream, ffmpeg, transcribeData });
+    }
+
+    return func;
+}
+
+eventEmitter.on('transcribe', ({ userId, sessionId, listenFrom }) => {
     const audioPayloadStream = new PassThrough({ highWaterMark: 1024 });
 
     const audioStream = async function* () {
@@ -17,6 +28,16 @@ const startTranscribing = async (listenFrom, { userId, sessionId }) => {
     const ffmpeg = createFfmpeg(listenFrom);
 
     ffmpeg.stdout.pipe(audioPayloadStream);
+
+    audioPayloadStream.on('data', waitForStreamToStartTranscribe(audioPayloadStream, ffmpeg, { userId, sessionId }));
+});
+
+eventEmitter.on('startTranscribe', async ({ stream, ffmpeg, transcribeData: { userId, sessionId } }) => {
+    const audioStream = async function* () {
+        for await (const chunk of stream) {
+            yield {AudioEvent: {AudioChunk: chunk}};
+        }
+    }
 
     const command = new StartStreamTranscriptionCommand({
         // The language code for the input audio. Valid values are en-GB, en-US, es-US, fr-CA, and fr-FR
@@ -49,11 +70,37 @@ const startTranscribing = async (listenFrom, { userId, sessionId }) => {
         if (result) {
             Readable.from(result.TranscriptResultStream).destroy()
         }
+
+        eventEmitter.emit('stopTranscribing');
     });
 
-    return result.TranscriptResultStream;
-}
+    eventEmitter.emit('transcripting', {
+        transcripts: result.TranscriptResultStream,
+        sessionId,
+    });
+});
+
+eventEmitter.on('transcripting', ({ transcripts, sessionId }) => {
+    console.log('TRANSCRIPTING: ', sessionId);
+
+    Readable.from(transcripts).pipe(
+        new Transform({
+            objectMode: true,
+            transform(chunk, encoding, cb) {
+                console.log(JSON.stringify(chunk));
+
+                cb();
+            }
+        })
+    )
+});
+
+eventEmitter.on('stopTranscribing', () => {
+    console.log('stopped transcribing');
+    console.log('uploading recording to s3...');
+    console.log('recording uploaded');
+})
 
 module.exports = {
-    startTranscribing,
+    eventEmitter,
 }
