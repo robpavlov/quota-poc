@@ -84,7 +84,7 @@ export async function onStopSession(payload: PayloadByEvent<TranscribeEvent.STOP
     console.log('stopped transcribing');
     console.log('uploading recording to s3...');
 
-    await uploadRecordingToS3(buildS3RecordingName(payload));
+    await uploadRecordingToS3(buildLocalRecordingName(payload));
 
     console.log('recording uploaded');
 }
