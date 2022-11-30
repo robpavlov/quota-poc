@@ -1,12 +1,13 @@
 import { TranscribeStreamingClient, StartStreamTranscriptionCommand } from "@aws-sdk/client-transcribe-streaming";
 import { PassThrough, Readable, Transform } from "node:stream";
 import { PayloadByEvent, emitEvent, TranscribeEvent } from "./emitters";
-import { createFfmpeg } from '../ffmpeg';
+import { createFfmpeg, buildLocalRecordingName } from '../ffmpeg';
+import { buildS3RecordingName, uploadRecordingToS3 } from "../s3";
 
 export function onStartSession({ userId, sessionId, streamLink }: PayloadByEvent<TranscribeEvent.START_SESSION>): void {
     const audioPayloadStream = new PassThrough({ highWaterMark: 1024 });
 
-    const ffmpeg = createFfmpeg(streamLink);
+    const ffmpeg = createFfmpeg(streamLink, buildLocalRecordingName({ sessionId }));
 
     ffmpeg.stdout.pipe(audioPayloadStream);
 
@@ -79,8 +80,11 @@ export function onProcessTranscription({ transcriptStream, sessionId }: PayloadB
     )
 }
 
-export function onStopSession(payload: PayloadByEvent<TranscribeEvent.STOP_SESSION>): void {
+export async function onStopSession(payload: PayloadByEvent<TranscribeEvent.STOP_SESSION>): Promise<void> {
     console.log('stopped transcribing');
     console.log('uploading recording to s3...');
+
+    await uploadRecordingToS3(buildS3RecordingName(payload));
+
     console.log('recording uploaded');
 }

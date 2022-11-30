@@ -36,5 +36,6 @@ type EmitPayloadTypeMap = {
 export type PayloadByEvent<Event extends TranscribeEvent> = TranscribeEvent extends keyof EmitPayloadTypeMap ? EmitPayloadTypeMap[Event] : never;
 
 export function emitEvent<T extends TranscribeEvent>(event: T, payload: PayloadByEvent<T>) {
+    console.log(event, payload);
     getTranscribeHandler().emit(event, payload);
 }

@@ -7,8 +7,9 @@ import { TranscribeEvent, emitEvent } from './services/transcribe/emitters';
 import { getTranscribeHandler } from "./services/transcribe";
 
 
-const transcribeHandler = getTranscribeHandler();
 const app = express();
+
+app.set('transcribeHandler', getTranscribeHandler());
 
 app.use(logger('dev'));
 app.use(express.json());

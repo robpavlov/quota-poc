@@ -1,7 +1,13 @@
 import { ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 
+export function buildLocalRecordingName({ sessionId }: {
+    sessionId: string;
+}): string {
+    return `${sessionId}.mp3`;
+}
 
-export function createFfmpeg(listenFrom: string): ChildProcessWithoutNullStreams {
+export function createFfmpeg(listenFrom: string, recordingName: string): ChildProcessWithoutNullStreams {
+    console.log('listen to stream', { listenFrom, recordingName });
     const child = spawn('ffmpeg', [
         '-re',
         '-y',
@@ -19,7 +25,7 @@ export function createFfmpeg(listenFrom: string): ChildProcessWithoutNullStreams
         '-ac', '1',
         'pipe:1',
         '-f', `mp3`,
-        'test.mp3'
+        recordingName,
     ],
     {
         stdio: ['pipe', 'pipe', 'pipe']
