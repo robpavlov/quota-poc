@@ -1,7 +1,7 @@
-const { spawn } = require('child_process');
+import { ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 
 
-const createFfmpeg = (listenFrom) => {
+export function createFfmpeg(listenFrom: string): ChildProcessWithoutNullStreams {
     const child = spawn('ffmpeg', [
         '-re',
         '-y',
@@ -10,7 +10,7 @@ const createFfmpeg = (listenFrom) => {
         '-vn',
         '-f', `wav`,
         '-acodec', `pcm_s16le`,
-        '-ar', process.env.TRANSCRIBING_SAMPLE_RATE,
+        '-ar', process.env.TRANSCRIBING_SAMPLE_RATE!,
         '-fflags', `nobuffer`,
         '-flags', `low_delay`,
         '-rtmp_buffer', `100`,
@@ -26,9 +26,4 @@ const createFfmpeg = (listenFrom) => {
     });
 
     return child;
-}
-
-
-module.exports = {
-    createFfmpeg,
 }

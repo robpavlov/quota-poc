@@ -1,16 +1,38 @@
-#!/usr/bin/env node
+import cookieParser from "cookie-parser";
+import { randomUUID } from "crypto";
+import express from "express";
+import logger from 'morgan';
+import http from 'http';
+import { TranscribeEvent, emitEvent } from './services/transcribe/emitters';
+import { getTranscribeHandler } from "./services/transcribe";
 
-/**
- * Module dependencies.
- */
 
-var app = require('../app');
-var debug = require('debug')('quota-poc:server');
-var http = require('http');
+const transcribeHandler = getTranscribeHandler();
+const app = express();
 
-/**
- * Get port from environment and store in Express.
- */
+app.use(logger('dev'));
+app.use(express.json());
+app.use(express.urlencoded({ extended: false }));
+app.use(cookieParser());
+
+app.post('/start', (req, res) => {
+    const userId = randomUUID();
+    const sessionId = randomUUID();
+    const streamLink = 'rtmp://0.0.0.0:1935/live';
+    
+
+    emitEvent(TranscribeEvent.START_SESSION, {
+        userId,
+        sessionId,
+        streamLink,
+    });
+
+    res
+        .send({
+            status: 'ok'
+        })
+        .end();
+});
 
 var port = normalizePort(process.env.PORT || '3000');
 app.set('port', port);
@@ -33,12 +55,12 @@ server.on('listening', onListening);
  * Normalize a port into a number, string, or false.
  */
 
-function normalizePort(val) {
-  var port = parseInt(val, 10);
+function normalizePort(value: string) {
+  var port = parseInt(value, 10);
 
   if (isNaN(port)) {
     // named pipe
-    return val;
+    return value;
   }
 
   if (port >= 0) {
@@ -53,7 +75,7 @@ function normalizePort(val) {
  * Event listener for HTTP server "error" event.
  */
 
-function onError(error) {
+function onError(error: any) {
   if (error.syscall !== 'listen') {
     throw error;
   }
@@ -85,6 +107,6 @@ function onListening() {
   var addr = server.address();
   var bind = typeof addr === 'string'
     ? 'pipe ' + addr
-    : 'port ' + addr.port;
-  debug('Listening on ' + bind);
+    : 'port ' + addr?.port;
+  console.log('Listening on ' + bind);
 }
